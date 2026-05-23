@@ -5,20 +5,23 @@ import {
   BadgeCheck,
   BookOpen,
   BriefcaseBusiness,
+  Camera,
+  Check,
   CircleDollarSign,
   ClipboardCheck,
   Fingerprint,
-  Medal,
+  MonitorDot,
   Radio,
-  Search,
+  ReceiptText,
+  RotateCcw,
+  ServerCrash,
   ShieldCheck,
-  Siren,
-  Sparkles,
   Terminal,
   Trophy,
   UserRound,
   Volume2,
   VolumeX,
+  WalletCards,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
@@ -42,246 +45,176 @@ import {
 } from "@/lib/arctective";
 
 type Screen =
-  | "cinematic"
+  | "intro"
   | "wallet"
   | "profile"
   | "registered"
   | "hub"
   | "caseDesk"
-  | "case"
+  | "tutorial"
+  | "investigation"
   | "board"
-  | "terminal"
+  | "timeline"
+  | "finalReport"
   | "closed"
   | "profileView"
   | "leaderboard"
   | "archive"
   | "arcTerminal";
 
-type EvidenceSlot =
-  | "Suspect"
-  | "Payment Trail"
-  | "Contradiction"
-  | "Root Cause"
-  | "Final Proof";
+type TxPurpose = "profile" | "case" | null;
+type ClueId =
+  | "buyer-receipt"
+  | "merchant-terminal-log"
+  | "invoice-id"
+  | "arc-settlement-timestamp"
+  | "stale-backend-warning"
+  | "wallet-trail";
+type BoardSlot = "Payment Trail" | "Contradiction" | "Root Cause" | "Final Proof";
+type HotspotId =
+  | "terminal"
+  | "printer"
+  | "invoice"
+  | "scanner"
+  | "server"
+  | "camera";
 
-type Evidence = {
-  id: string;
+type Clue = {
+  id: ClueId;
+  icon: string;
   title: string;
   text: string;
-  slot: EvidenceSlot;
-  icon: string;
+  byte: string;
 };
 
-type CaseFile = {
-  id: number;
-  title: string;
-  theme: string;
-  scene: string;
-  npc: string;
-  npcLine: string;
-  lesson: string;
-  badge: number;
-  score: number;
-  briefing: string;
-  evidence: Evidence[];
-  answers: string[];
+type Hotspot = {
+  id: HotspotId;
+  label: string;
+  clue: ClueId;
+  className: string;
+  Icon: typeof Terminal;
 };
 
-const CASES: CaseFile[] = [
+const CASE_ID = ARCTECTIVE_CASES.FINAL_RECEIPT;
+const CASE_TITLE = "The Final Receipt";
+const CASE_SCORE = 96;
+
+const CLUES: Record<ClueId, Clue> = {
+  "buyer-receipt": {
+    id: "buyer-receipt",
+    icon: "RCPT",
+    title: "Buyer Receipt",
+    text: "Receipt shows final settlement.",
+    byte: "Receipt has a final timestamp. That matters.",
+  },
+  "merchant-terminal-log": {
+    id: "merchant-terminal-log",
+    icon: "TERM",
+    title: "Merchant Terminal Log",
+    text: "Terminal still says pending.",
+    byte: "Pending here, final elsewhere. Smells stale.",
+  },
+  "invoice-id": {
+    id: "invoice-id",
+    icon: "INV",
+    title: "Invoice ID",
+    text: "Same invoice on both records.",
+    byte: "Invoice matches. The dispute is status, not amount.",
+  },
+  "arc-settlement-timestamp": {
+    id: "arc-settlement-timestamp",
+    icon: "ARC",
+    title: "Arc Settlement Timestamp",
+    text: "Sub-second finality locked it.",
+    byte: "Finality does not blink.",
+  },
+  "stale-backend-warning": {
+    id: "stale-backend-warning",
+    icon: "SYNC",
+    title: "Stale Backend Warning",
+    text: "Backend stopped syncing.",
+    byte: "The backend froze before the truth arrived.",
+  },
+  "wallet-trail": {
+    id: "wallet-trail",
+    icon: "0x",
+    title: "Wallet Trail",
+    text: "Buyer wallet paid once.",
+    byte: "One payment. One trail. No double spend drama.",
+  },
+};
+
+const HOTSPOTS: Hotspot[] = [
   {
-    id: ARCTECTIVE_CASES.FINAL_RECEIPT,
-    title: "The Final Receipt",
-    theme: "Payment settlement and deterministic finality",
-    scene: "Neon payment alley",
-    npc: "Juno Pay",
-    npcLine: "My terminal says pending. The buyer keeps waving a receipt.",
-    lesson: "Final settlement is evidence.",
-    badge: ARCTECTIVE_BADGES.FINAL_RECEIPT_FOUND,
-    score: 96,
-    briefing:
-      "A merchant says a buyer never paid. The receipt says otherwise. Find the stale system before the rumor becomes the truth.",
-    evidence: [
-      {
-        id: "buyer-receipt",
-        title: "Buyer Receipt",
-        text: "A signed payment receipt with a settled Arc timestamp.",
-        slot: "Payment Trail",
-        icon: "USDC",
-      },
-      {
-        id: "terminal-log",
-        title: "Merchant Terminal Log",
-        text: "The terminal cached an old pending status after checkout.",
-        slot: "Contradiction",
-        icon: "CRT",
-      },
-      {
-        id: "wallet-trail",
-        title: "Wallet Trail",
-        text: "The buyer wallet paid the invoice once, not twice.",
-        slot: "Suspect",
-        icon: "0x",
-      },
-      {
-        id: "stale-warning",
-        title: "Stale Backend Warning",
-        text: "The merchant backend missed the final settlement callback.",
-        slot: "Root Cause",
-        icon: "ERR",
-      },
-      {
-        id: "arc-finality",
-        title: "Arc Settlement Timestamp",
-        text: "Sub-second deterministic finality locks the case.",
-        slot: "Final Proof",
-        icon: "ARC",
-      },
-    ],
-    answers: [
-      "payment settled",
-      "arc settlement timestamp",
-      "merchant backend",
-      "deterministic finality",
-      "yes",
-    ],
+    id: "terminal",
+    label: "Merchant Terminal",
+    clue: "merchant-terminal-log",
+    className: "terminal-object",
+    Icon: MonitorDot,
   },
   {
-    id: ARCTECTIVE_CASES.AGENT_PAID_TWICE,
-    title: "The Agent Who Paid Twice",
-    theme: "Agentic payments and machine-readable settlement",
-    scene: "Automated warehouse",
-    npc: "Agent K-77",
-    npcLine: "Instruction executed. Twice. Efficiency: 200%.",
-    lesson: "Agentic commerce needs fast, final, machine-readable settlement.",
-    badge: ARCTECTIVE_BADGES.DOUBLE_PAY_SLAYER,
-    score: 91,
-    briefing:
-      "K-77 retried a payout because its workflow never checked final settlement state before executing again.",
-    evidence: [
-      {
-        id: "invoice-id",
-        title: "Invoice ID",
-        text: "The same invoice appears on both payment receipts.",
-        slot: "Payment Trail",
-        icon: "INV",
-      },
-      {
-        id: "receipt-b",
-        title: "Payment Receipt B",
-        text: "A second transfer fired during the retry window.",
-        slot: "Contradiction",
-        icon: "B",
-      },
-      {
-        id: "agent-k77",
-        title: "Agent K-77",
-        text: "The purchasing agent executed duplicate retry logic.",
-        slot: "Suspect",
-        icon: "AI",
-      },
-      {
-        id: "retry-log",
-        title: "Agent Retry Log",
-        text: "The workflow ignored settlement proof before retrying.",
-        slot: "Root Cause",
-        icon: "LOG",
-      },
-      {
-        id: "settlement-state",
-        title: "Settlement State",
-        text: "A machine-readable final receipt should have stopped payment two.",
-        slot: "Final Proof",
-        icon: "FIN",
-      },
-    ],
-    answers: [
-      "agent paid twice",
-      "agent retry log",
-      "agent k-77",
-      "machine-readable settlement",
-      "yes",
-    ],
+    id: "printer",
+    label: "Receipt Printer",
+    clue: "buyer-receipt",
+    className: "printer-object",
+    Icon: ReceiptText,
   },
   {
-    id: ARCTECTIVE_CASES.PRIVATE_LEDGER,
-    title: "The Private Ledger Room",
-    theme: "Privacy-aware auditability",
-    scene: "Dark privacy vault",
-    npc: "Vega Shield",
-    npcLine: "A good proof reveals enough. A bad system reveals everything.",
-    lesson: "Finance needs both proof and privacy.",
-    badge: ARCTECTIVE_BADGES.REDACTION_EXPERT,
-    score: 88,
-    briefing:
-      "Prove a payout happened without leaking supplier identity or private notes.",
-    evidence: [
-      {
-        id: "timestamp",
-        title: "Timestamp",
-        text: "Reveal the payment time.",
-        slot: "Payment Trail",
-        icon: "TIME",
-      },
-      {
-        id: "invoice-hash",
-        title: "Invoice Hash",
-        text: "Reveal the invoice commitment, not the private invoice.",
-        slot: "Final Proof",
-        icon: "HASH",
-      },
-      {
-        id: "amount-range",
-        title: "Amount Range",
-        text: "Reveal a bounded amount range.",
-        slot: "Contradiction",
-        icon: "USDC",
-      },
-      {
-        id: "counterparty-type",
-        title: "Counterparty Type",
-        text: "A supplier category is enough for the audit.",
-        slot: "Suspect",
-        icon: "TYPE",
-      },
-      {
-        id: "payout-confirmation",
-        title: "Payout Confirmation",
-        text: "The payout was confirmed without oversharing identity.",
-        slot: "Root Cause",
-        icon: "OK",
-      },
-    ],
-    answers: [
-      "prove payout privately",
-      "invoice hash",
-      "privacy auditor",
-      "privacy-aware auditability",
-      "yes",
-    ],
+    id: "invoice",
+    label: "Invoice Board",
+    clue: "invoice-id",
+    className: "invoice-object",
+    Icon: ClipboardCheck,
+  },
+  {
+    id: "scanner",
+    label: "Wallet Scanner",
+    clue: "wallet-trail",
+    className: "scanner-object",
+    Icon: WalletCards,
+  },
+  {
+    id: "server",
+    label: "Backend Server",
+    clue: "stale-backend-warning",
+    className: "server-object",
+    Icon: ServerCrash,
+  },
+  {
+    id: "camera",
+    label: "Timestamp Screen",
+    clue: "arc-settlement-timestamp",
+    className: "camera-object",
+    Icon: Camera,
   },
 ];
 
-const cinematicLines = [
-  "Arc City never sleeps.",
-  "Not because people are awake.",
-  "Because money is.",
-  "Before the Bureau, every dispute became a rumor.",
-  "Every failed payment became a ghost story.",
-  "Every agent mistake became someone else's loss.",
-  "Then came the Arctectives.",
-  "Investigators trained to read the only evidence that never blinks.",
-  "Final settlement.",
-  "New Detective Required.",
-  "Bind your identity.",
-  "Register your badge on Arc.",
-];
-
-const slots: EvidenceSlot[] = [
-  "Suspect",
+const BOARD_SLOTS: BoardSlot[] = [
   "Payment Trail",
   "Contradiction",
   "Root Cause",
   "Final Proof",
+];
+
+const BOARD_RULES: Record<BoardSlot, ClueId[]> = {
+  "Payment Trail": ["buyer-receipt", "wallet-trail"],
+  Contradiction: ["merchant-terminal-log"],
+  "Root Cause": ["stale-backend-warning"],
+  "Final Proof": ["arc-settlement-timestamp"],
+};
+
+const TIMELINE_CORRECT = [
+  "Buyer sent payment.",
+  "Arc settlement finalized.",
+  "Merchant backend failed to sync.",
+  "Merchant falsely saw pending.",
+];
+
+const TIMELINE_START = [
+  "Merchant falsely saw pending.",
+  "Buyer sent payment.",
+  "Merchant backend failed to sync.",
+  "Arc settlement finalized.",
 ];
 
 const badgeNames: Record<number, string> = {
@@ -299,50 +232,75 @@ function hasInjectedWallet() {
   );
 }
 
+function initialProgress() {
+  if (typeof window === "undefined") {
+    return {
+      clues: [] as ClueId[],
+      placements: emptyPlacements(),
+      timeline: TIMELINE_START,
+      timelineSolved: false,
+      tutorialDone: false,
+    };
+  }
+  const saved = window.localStorage.getItem("arctective-case-1");
+  if (!saved) {
+    return {
+      clues: [] as ClueId[],
+      placements: emptyPlacements(),
+      timeline: TIMELINE_START,
+      timelineSolved: false,
+      tutorialDone: false,
+    };
+  }
+  return {
+    clues: [] as ClueId[],
+    placements: emptyPlacements(),
+    timeline: TIMELINE_START,
+    timelineSolved: false,
+    tutorialDone: false,
+    ...(JSON.parse(saved) as Partial<{
+      clues: ClueId[];
+      placements: Record<BoardSlot, ClueId | null>;
+      timeline: string[];
+      timelineSolved: boolean;
+      tutorialDone: boolean;
+    }>),
+  };
+}
+
+function emptyPlacements(): Record<BoardSlot, ClueId | null> {
+  return {
+    "Payment Trail": null,
+    Contradiction: null,
+    "Root Cause": null,
+    "Final Proof": null,
+  };
+}
+
 export default function Home() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { connectors, connect, error: connectError } = useConnect();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync, data: txHash, isPending } = useWriteContract();
-  const [screen, setScreen] = useState<Screen>("cinematic");
-  const [activeCaseId, setActiveCaseId] = useState(1);
-  const [discovered, setDiscovered] = useState<Record<number, string[]>>(() => {
-    if (typeof window === "undefined") return {};
-    const saved = window.localStorage.getItem("arctective-progress");
-    if (!saved) return {};
-    return (
-      JSON.parse(saved) as {
-        discovered?: Record<number, string[]>;
-      }
-    ).discovered ?? {};
-  });
-  const [placements, setPlacements] = useState<Record<string, string>>(() => {
-    if (typeof window === "undefined") return {};
-    const saved = window.localStorage.getItem("arctective-progress");
-    if (!saved) return {};
-    return (
-      JSON.parse(saved) as {
-        placements?: Record<string, string>;
-      }
-    ).placements ?? {};
-  });
-  const [answers, setAnswers] = useState<string[]>(["", "", "", "", ""]);
+
+  const [screen, setScreen] = useState<Screen>("intro");
+  const [txPurpose, setTxPurpose] = useState<TxPurpose>(null);
   const [lastTx, setLastTx] = useState<string>("");
+  const [walletAvailable, setWalletAvailable] = useState(() => hasInjectedWallet());
   const [music, setMusic] = useState(false);
   const [sfx, setSfx] = useState(true);
   const [form, setForm] = useState({ x: "", nickname: "", motto: "" });
   const [formError, setFormError] = useState("");
-  const [walletAvailable, setWalletAvailable] = useState(() => hasInjectedWallet());
-  const [lineIndex, setLineIndex] = useState(0);
+  const [progress, setProgress] = useState(() => initialProgress());
+  const [selectedClue, setSelectedClue] = useState<ClueId | null>(null);
+  const [byteLine, setByteLine] = useState("Tap glowing objects. I will catch the receipts.");
+  const [lastFound, setLastFound] = useState<ClueId | null>(null);
+  const [wrongSlot, setWrongSlot] = useState<BoardSlot | null>(null);
+  const [timelineShake, setTimelineShake] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   const isArc = chainId === ARC_TESTNET.id;
-  const activeCase = CASES.find((caseFile) => caseFile.id === activeCaseId) ?? CASES[0];
-  const discoveredIds = discovered[activeCase.id] ?? [];
-  const correctPlacements = activeCase.evidence.filter(
-    (item) => placements[item.slot] === item.id,
-  ).length;
-  const terminalUnlocked = correctPlacements === slots.length;
   const avatarURI = form.x ? `https://unavatar.io/x/${form.x.replace("@", "")}` : "";
 
   const { data: hasProfile, refetch: refetchHasProfile } = useReadContract({
@@ -377,6 +335,14 @@ export default function Home() {
     query: { enabled: Boolean(address && isArc && hasProfile) },
   });
 
+  const { data: hasSolvedCaseOne } = useReadContract({
+    address: ARCTECTIVE_CONTRACT_ADDRESS,
+    abi: ARCTECTIVE_ABI,
+    functionName: "hasSolvedCase",
+    args: address ? [address, BigInt(CASE_ID)] : undefined,
+    query: { enabled: Boolean(address && isArc && hasProfile) },
+  });
+
   const { data: leaderboard } = useReadContract({
     address: ARCTECTIVE_CONTRACT_ADDRESS,
     abi: ARCTECTIVE_ABI,
@@ -399,30 +365,18 @@ export default function Home() {
     () => ((badgeIds ?? []) as readonly bigint[]).map((id) => Number(id)),
     [badgeIds],
   );
+  const boardSolved = BOARD_SLOTS.every((slot) => progress.placements[slot]);
+  const canOpenBoard = progress.clues.length >= 4;
+  const canCloseCase = boardSolved && progress.timelineSolved;
 
   useEffect(() => {
-    window.localStorage.setItem(
-      "arctective-progress",
-      JSON.stringify({ discovered, placements }),
-    );
-  }, [discovered, placements]);
-
-  useEffect(() => {
-    if (screen !== "cinematic") return;
-    const timer = window.setInterval(() => {
-      setLineIndex((current) =>
-        current < cinematicLines.length - 1 ? current + 1 : current,
-      );
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [screen]);
+    window.localStorage.setItem("arctective-case-1", JSON.stringify(progress));
+  }, [progress]);
 
   useEffect(() => {
     const updateWalletState = () =>
       window.setTimeout(() => setWalletAvailable(hasInjectedWallet()), 0);
-    window.addEventListener("ethereum#initialized", updateWalletState, {
-      once: true,
-    });
+    window.addEventListener("ethereum#initialized", updateWalletState, { once: true });
     window.addEventListener("focus", updateWalletState);
     updateWalletState();
     return () => {
@@ -447,16 +401,20 @@ export default function Home() {
     void refetchProfile();
     void refetchSolved();
     void refetchBadges();
-    if (screen === "profile") window.setTimeout(() => setScreen("registered"), 0);
-    if (screen === "terminal") window.setTimeout(() => setScreen("closed"), 0);
+    if (txPurpose === "profile") {
+      window.setTimeout(() => setScreen("registered"), 0);
+    }
+    if (txPurpose === "case") {
+      window.setTimeout(() => setScreen("closed"), 0);
+    }
   }, [
     receipt.isSuccess,
     refetchBadges,
     refetchHasProfile,
     refetchProfile,
     refetchSolved,
-    screen,
     txHash,
+    txPurpose,
   ]);
 
   async function switchToArc() {
@@ -488,10 +446,11 @@ export default function Home() {
     event.preventDefault();
     setFormError("");
     if (!form.x.trim() || !form.nickname.trim()) {
-      setFormError("X username and detective nickname are required.");
+      setFormError("X username and nickname required.");
       return;
     }
     try {
+      setTxPurpose("profile");
       await writeContractAsync({
         address: ARCTECTIVE_CONTRACT_ADDRESS,
         abi: ARCTECTIVE_ABI,
@@ -504,156 +463,205 @@ export default function Home() {
         ],
       });
     } catch (error) {
+      setTxPurpose(null);
       setFormError(error instanceof Error ? error.message : "Transaction failed.");
     }
   }
 
-  async function solveCase() {
-    if (!address || !terminalUnlocked) return;
-    const normalized = answers.map((answer) => answer.trim().toLowerCase());
-    const correct = activeCase.answers.every((answer, index) =>
-      normalized[index]?.includes(answer),
-    );
-    if (!correct) {
-      setFormError("The terminal rejects the deduction. Recheck the board.");
+  function enterCase() {
+    setByteLine("First, a fast field drill. Tap the glowing receipt.");
+    setTutorialStep(progress.tutorialDone ? 4 : 0);
+    setScreen(progress.tutorialDone ? "investigation" : "tutorial");
+  }
+
+  function collectClue(clueId: ClueId) {
+    const clue = CLUES[clueId];
+    setByteLine(clue.byte);
+    setLastFound(clueId);
+    setProgress((current) => {
+      if (current.clues.includes(clueId)) return current;
+      return { ...current, clues: [...current.clues, clueId] };
+    });
+    window.setTimeout(() => setLastFound(null), 1600);
+  }
+
+  function placeClue(slot: BoardSlot) {
+    if (!selectedClue || progress.placements[slot]) return;
+    if (!BOARD_RULES[slot].includes(selectedClue)) {
+      setWrongSlot(slot);
+      setByteLine("Wrong slot. That clue does not prove this part.");
+      window.setTimeout(() => setWrongSlot(null), 450);
       return;
     }
+    setProgress((current) => ({
+      ...current,
+      placements: { ...current.placements, [slot]: selectedClue },
+    }));
+    setSelectedClue(null);
+    setByteLine("Evidence locked.");
+  }
+
+  function resetBoard() {
+    setProgress((current) => ({ ...current, placements: emptyPlacements() }));
+    setSelectedClue(null);
+    setByteLine("Board cleared. The receipts are still here.");
+  }
+
+  function moveTimeline(index: number, direction: -1 | 1) {
+    setProgress((current) => {
+      const next = [...current.timeline];
+      const swapIndex = index + direction;
+      if (swapIndex < 0 || swapIndex >= next.length) return current;
+      [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+      return { ...current, timeline: next };
+    });
+  }
+
+  function checkTimeline() {
+    const correct = progress.timeline.every(
+      (tile, index) => tile === TIMELINE_CORRECT[index],
+    );
+    if (!correct) {
+      setTimelineShake(true);
+      setByteLine("Close, but the order still glitches.");
+      window.setTimeout(() => setTimelineShake(false), 450);
+      return;
+    }
+    setProgress((current) => ({ ...current, timelineSolved: true }));
+    setByteLine("Timeline reconstructed. The case is ready for Arc.");
+  }
+
+  async function closeCaseOnArc() {
+    if (!address || !canCloseCase) return;
     setFormError("");
-    // eslint-disable-next-line react-hooks/purity
     const timestamp = Date.now();
-    const evidenceHash = `arctective-case-${activeCase.id}-${activeCase.title
-      .toLowerCase()
-      .replaceAll(" ", "-")}-${address}-${timestamp}`;
+    const evidenceHash = `arctective-case-1-final-receipt-${address}-${timestamp}`;
     try {
+      setTxPurpose("case");
       await writeContractAsync({
         address: ARCTECTIVE_CONTRACT_ADDRESS,
         abi: ARCTECTIVE_ABI,
         functionName: "solveCase",
-        args: [BigInt(activeCase.id), activeCase.score, evidenceHash],
+        args: [BigInt(CASE_ID), CASE_SCORE, evidenceHash],
       });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Case proof failed.");
+      setTxPurpose(null);
+      setFormError(error instanceof Error ? error.message : "Case filing failed.");
     }
   }
 
-  function discover(evidenceId: string) {
-    setDiscovered((current) => {
-      const caseItems = current[activeCase.id] ?? [];
-      if (caseItems.includes(evidenceId)) return current;
-      return { ...current, [activeCase.id]: [...caseItems, evidenceId] };
+  function resetLocalCase() {
+    setProgress({
+      clues: [],
+      placements: emptyPlacements(),
+      timeline: TIMELINE_START,
+      timelineSolved: false,
+      tutorialDone: false,
     });
-  }
-
-  function startCase(caseId: number) {
-    setActiveCaseId(caseId);
-    setAnswers(["", "", "", "", ""]);
-    setFormError("");
-    setScreen("case");
-  }
-
-  if (screen === "cinematic") {
-    return (
-      <GameFrame music={music} sfx={sfx} setMusic={setMusic} setSfx={setSfx}>
-        <OpeningCinematic
-          lineIndex={lineIndex}
-          onStart={() => setScreen("wallet")}
-        />
-      </GameFrame>
-    );
+    setSelectedClue(null);
+    setByteLine("Case reset. The alley is noisy again.");
   }
 
   return (
     <GameFrame music={music} sfx={sfx} setMusic={setMusic} setSfx={setSfx}>
       <AnimatePresence mode="wait">
-        {!isConnected && (
+        {screen === "intro" && (
+          <ScreenPanel key="intro">
+            <IntroScreen onStart={() => setScreen("wallet")} />
+          </ScreenPanel>
+        )}
+
+        {!isConnected && screen !== "intro" && (
           <ScreenPanel key="wallet">
-            <div className="grid min-h-[74vh] gap-6 lg:grid-cols-[1fr_0.8fr]">
-              <HeroScene />
-              <PixelPanel className="self-center">
-                <p className="kicker">New Detective Required</p>
-                <h1 className="pixel-title">Bind your badge to Arc.</h1>
-                <p className="mt-4 text-sm leading-7 text-cyan-100/80">
-                  The Bureau only opens after your wallet connects. USDC is gas.
-                  Final receipts are evidence. Reputation lives on Arc Testnet.
-                </p>
-                <button
-                  className="pixel-button mt-6 w-full"
-                  disabled={!walletAvailable || !connectors[0]}
-                  onClick={() => connect({ connector: connectors[0] })}
-                >
-                  <Fingerprint size={18} />
-                  Connect Wallet
-                </button>
-                {!walletAvailable && (
-                  <p className="mt-4 text-xs leading-6 text-cyan-100/65">
-                    No injected wallet detected in this browser. Open the game in a
-                    wallet-enabled browser or enable your wallet extension.
-                  </p>
-                )}
-                {connectError && (
-                  <p className="mt-4 text-xs text-red-300">{connectError.message}</p>
-                )}
-              </PixelPanel>
-            </div>
+            <WalletScreen
+              connectError={connectError?.message}
+              connectorsReady={Boolean(connectors[0])}
+              walletAvailable={walletAvailable}
+              onConnect={() => connect({ connector: connectors[0] })}
+            />
           </ScreenPanel>
         )}
 
         {isConnected && !isArc && (
           <ScreenPanel key="network">
-            <NetworkGate onSwitch={switchToArc} address={address} />
+            <NetworkGate address={address} onSwitch={switchToArc} />
           </ScreenPanel>
         )}
 
-        {isConnected && isArc && screen === "profile" && (
+        {isConnected && isArc && hasProfile === undefined && (
+          <ScreenPanel key="loading-profile">
+            <LoadingTerminal text="Reading detective badge from Arc..." />
+          </ScreenPanel>
+        )}
+
+        {isConnected && isArc && hasProfile === false && screen === "profile" && (
           <ScreenPanel key="profile">
             <ProfileCreation
-              form={form}
+              address={address}
               avatarURI={avatarURI}
+              error={formError}
+              form={form}
+              pending={isPending || receipt.isLoading}
               setForm={setForm}
               onSubmit={createProfile}
-              error={formError}
-              pending={isPending || receipt.isLoading}
-              address={address}
             />
           </ScreenPanel>
         )}
 
         {isConnected && isArc && screen === "registered" && (
           <ScreenPanel key="registered">
-            <RookieBadge onEnter={() => setScreen("hub")} txHash={lastTx} />
+            <RookieBadge txHash={lastTx} onEnter={() => setScreen("hub")} />
           </ScreenPanel>
         )}
 
         {isConnected && isArc && hasProfile && screen === "hub" && (
           <ScreenPanel key="hub">
             <BureauHub
+              address={address}
+              badges={badgeNumbers}
               profile={profile}
+              solved={solvedCaseNumbers}
               onNavigate={setScreen}
-              solvedCount={solvedCaseNumbers.length}
             />
           </ScreenPanel>
         )}
 
         {screen === "caseDesk" && (
-          <ScreenPanel key="caseDesk">
+          <ScreenPanel key="case-desk">
             <CaseDesk
-              cases={CASES}
-              solved={solvedCaseNumbers}
+              caseSolved={Boolean(hasSolvedCaseOne)}
               onBack={() => setScreen("hub")}
-              onStart={startCase}
+              onStart={enterCase}
             />
           </ScreenPanel>
         )}
 
-        {screen === "case" && (
-          <ScreenPanel key="case">
-            <CaseScene
-              caseFile={activeCase}
-              discoveredIds={discoveredIds}
-              solved={solvedCaseNumbers.includes(activeCase.id)}
-              onDiscover={discover}
-              onBoard={() => setScreen("board")}
+        {screen === "tutorial" && (
+          <ScreenPanel key="tutorial">
+            <TutorialScreen
+              step={tutorialStep}
+              onStep={setTutorialStep}
+              onComplete={() => {
+                setProgress((current) => ({ ...current, tutorialDone: true }));
+                setByteLine("Good. Now solve the real case.");
+                setScreen("investigation");
+              }}
+            />
+          </ScreenPanel>
+        )}
+
+        {screen === "investigation" && (
+          <ScreenPanel key="investigation">
+            <InvestigationScreen
+              address={address}
+              byteLine={byteLine}
+              canOpenBoard={canOpenBoard}
+              clues={progress.clues}
+              lastFound={lastFound}
+              profile={profile}
               onBack={() => setScreen("caseDesk")}
+              onBoard={() => setScreen("board")}
+              onCollect={collectClue}
             />
           </ScreenPanel>
         )}
@@ -661,29 +669,42 @@ export default function Home() {
         {screen === "board" && (
           <ScreenPanel key="board">
             <EvidenceBoard
-              caseFile={activeCase}
-              discoveredIds={discoveredIds}
-              placements={placements}
-              correctCount={correctPlacements}
-              onPlace={(slot, evidenceId) =>
-                setPlacements((current) => ({ ...current, [slot]: evidenceId }))
-              }
-              onBack={() => setScreen("case")}
-              onTerminal={() => setScreen("terminal")}
+              clues={progress.clues}
+              placements={progress.placements}
+              selectedClue={selectedClue}
+              wrongSlot={wrongSlot}
+              onBack={() => setScreen("investigation")}
+              onPlace={placeClue}
+              onReset={resetBoard}
+              onSelect={setSelectedClue}
+              onTimeline={() => setScreen("timeline")}
             />
           </ScreenPanel>
         )}
 
-        {screen === "terminal" && (
-          <ScreenPanel key="terminal">
-            <DeductionTerminal
-              caseFile={activeCase}
-              answers={answers}
-              setAnswers={setAnswers}
+        {screen === "timeline" && (
+          <ScreenPanel key="timeline">
+            <TimelineScreen
+              byteLine={byteLine}
+              shake={timelineShake}
+              solved={progress.timelineSolved}
+              tiles={progress.timeline}
               onBack={() => setScreen("board")}
-              onSolve={solveCase}
-              pending={isPending || receipt.isLoading}
+              onCheck={checkTimeline}
+              onMove={moveTimeline}
+              onReport={() => setScreen("finalReport")}
+            />
+          </ScreenPanel>
+        )}
+
+        {screen === "finalReport" && (
+          <ScreenPanel key="final-report">
+            <FinalReport
               error={formError}
+              pending={isPending || receipt.isLoading}
+              profile={profile}
+              onBack={() => setScreen("timeline")}
+              onClose={closeCaseOnArc}
             />
           </ScreenPanel>
         )}
@@ -691,7 +712,7 @@ export default function Home() {
         {screen === "closed" && (
           <ScreenPanel key="closed">
             <CaseClosed
-              caseFile={activeCase}
+              profile={profile}
               txHash={lastTx || txHash || ""}
               onHub={() => setScreen("hub")}
             />
@@ -699,12 +720,12 @@ export default function Home() {
         )}
 
         {screen === "profileView" && (
-          <ScreenPanel key="profileView">
+          <ScreenPanel key="profile-view">
             <ProfileScreen
-              profile={profile}
               address={address}
-              solved={solvedCaseNumbers}
               badges={badgeNumbers}
+              profile={profile}
+              solved={solvedCaseNumbers}
               onBack={() => setScreen("hub")}
             />
           </ScreenPanel>
@@ -721,16 +742,22 @@ export default function Home() {
 
         {screen === "archive" && (
           <ScreenPanel key="archive">
-            <ArchiveScreen solved={solvedCaseNumbers} onBack={() => setScreen("hub")} />
+            <ArchiveScreen
+              caseSolved={Boolean(hasSolvedCaseOne)}
+              onBack={() => setScreen("hub")}
+            />
           </ScreenPanel>
         )}
 
         {screen === "arcTerminal" && (
-          <ScreenPanel key="arcTerminal">
+          <ScreenPanel key="arc-terminal">
             <ArcTerminalScreen onBack={() => setScreen("hub")} />
           </ScreenPanel>
         )}
       </AnimatePresence>
+      <button className="debug-reset" onClick={resetLocalCase} title="Reset local case">
+        <RotateCcw size={14} />
+      </button>
     </GameFrame>
   );
 }
@@ -749,19 +776,12 @@ function GameFrame({
   setSfx(value: boolean): void;
 }) {
   return (
-    <main className="crt relative min-h-screen overflow-hidden bg-[#03070a] text-cyan-50">
+    <main className="crt game-root">
       <Rain />
       <div className="city-backdrop" />
       <div className="steam steam-one" />
       <div className="steam steam-two" />
-      <motion.div
-        className="byte-drone"
-        animate={{ y: [0, -12, 0], rotate: [0, 3, -2, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <div className="byte-eye">::</div>
-      </motion.div>
-      <div className="fixed right-4 top-4 z-30 flex gap-2">
+      <div className="sound-rack">
         <button className="sound-button" onClick={() => setMusic(!music)} title="Music">
           {music ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </button>
@@ -769,24 +789,22 @@ function GameFrame({
           {sfx ? <Radio size={16} /> : <VolumeX size={16} />}
         </button>
       </div>
-      <div className="relative z-10 mx-auto min-h-screen max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {children}
-      </div>
+      <div className="game-shell">{children}</div>
     </main>
   );
 }
 
 function Rain() {
   return (
-    <div className="pointer-events-none fixed inset-0 z-0">
-      {Array.from({ length: 54 }).map((_, index) => (
+    <div className="rain-field">
+      {Array.from({ length: 48 }).map((_, index) => (
         <span
           className="rain-drop"
           key={index}
           style={{
-            left: `${(index * 37) % 100}%`,
-            animationDelay: `${(index % 17) * 0.17}s`,
-            animationDuration: `${0.8 + (index % 7) * 0.08}s`,
+            left: `${(index * 31) % 100}%`,
+            animationDelay: `${(index % 13) * 0.13}s`,
+            animationDuration: `${0.75 + (index % 6) * 0.09}s`,
           }}
         />
       ))}
@@ -797,10 +815,10 @@ function Rain() {
 function ScreenPanel({ children }: { children: React.ReactNode }) {
   return (
     <motion.section
-      initial={{ opacity: 0, scale: 0.985, filter: "blur(6px)" }}
-      animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-      exit={{ opacity: 0, scale: 1.01, filter: "blur(6px)" }}
-      transition={{ duration: 0.35 }}
+      initial={{ opacity: 0, scale: 0.98, filter: "blur(4px)" }}
+      animate={{ opacity: 1, scale: 1, filter: "blur(0)" }}
+      exit={{ opacity: 0, scale: 1.01, filter: "blur(4px)" }}
+      transition={{ duration: 0.22 }}
     >
       {children}
     </motion.section>
@@ -817,84 +835,93 @@ function PixelPanel({
   return <div className={`pixel-panel ${className}`}>{children}</div>;
 }
 
-function OpeningCinematic({
-  lineIndex,
-  onStart,
-}: {
-  lineIndex: number;
-  onStart(): void;
-}) {
+function IntroScreen({ onStart }: { onStart(): void }) {
   return (
-    <div className="grid min-h-[88vh] items-end gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-      <HeroScene />
-      <PixelPanel className="mb-10">
-        <div className="mb-5 flex items-center gap-3 text-xs text-cyan-300">
-          <Siren size={18} />
-          ARC DETECTIVE BUREAU SIGNAL
+    <div className="intro-screen">
+      <div className="office-hero">
+        <MaraPortrait />
+        <ByteDrone />
+        <div className="office-title">
+          <span>ARCTECTIVE</span>
+          <h1>The Final Receipt</h1>
+          <p>Arc City disputes end where final receipts begin.</p>
         </div>
-        <AnimatePresence mode="wait">
-          <motion.h1
-            key={cinematicLines[lineIndex]}
-            className="pixel-title min-h-32"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-          >
-            {cinematicLines[lineIndex]}
-          </motion.h1>
-        </AnimatePresence>
-        <button className="pixel-button mt-8 w-full" onClick={onStart}>
-          <Search size={18} />
+        <button className="pixel-button start-button" onClick={onStart}>
+          <Fingerprint size={18} />
           Start Investigation
         </button>
+      </div>
+      <PixelPanel className="intro-brief">
+        <p className="kicker">Chief Mara Voss</p>
+        <h2>People lie. Systems fail. Receipts remember.</h2>
+        <p>Connect, register, inspect the alley, and close Case 1 on Arc.</p>
       </PixelPanel>
     </div>
   );
 }
 
-function HeroScene() {
+function WalletScreen({
+  connectError,
+  connectorsReady,
+  walletAvailable,
+  onConnect,
+}: {
+  connectError?: string;
+  connectorsReady: boolean;
+  walletAvailable: boolean;
+  onConnect(): void;
+}) {
   return (
-    <div className="hero-scene min-h-[560px]">
-      <div className="moon" />
-      <div className="billboard">USDC GAS / ARC FINALITY</div>
-      <div className="window-grid" />
-      <div className="pixel-car car-one" />
-      <div className="pixel-car car-two" />
-      <motion.div
-        className="mara"
-        animate={{ filter: ["brightness(1)", "brightness(1.25)", "brightness(1)"] }}
-        transition={{ duration: 3.4, repeat: Infinity }}
-      >
-        <div className="mara-hair" />
-        <div className="mara-face" />
-        <div className="mara-coat" />
-        <div className="monocle" />
-      </motion.div>
-      <div className="briefing-card">
-        <p>People lie. Systems fail. Receipts remember.</p>
-        <span>Mara Voss</span>
+    <div className="gate-layout">
+      <PixelPanel className="terminal-card">
+        <p className="kicker">Arc Detective Bureau</p>
+        <h1>Wallet Checkpoint</h1>
+        <div className="terminal-readout">
+          <p>&gt; injected wallet: {walletAvailable ? "detected" : "missing"}</p>
+          <p>&gt; target chain: Arc Testnet / 5042002</p>
+          <p>&gt; native gas: USDC</p>
+        </div>
+        <button
+          className="pixel-button"
+          disabled={!walletAvailable || !connectorsReady}
+          onClick={onConnect}
+        >
+          <Fingerprint size={18} />
+          Connect Wallet
+        </button>
+        {!walletAvailable && (
+          <p className="microcopy">
+            Open in a wallet-enabled browser or enable your wallet extension.
+          </p>
+        )}
+        {connectError && <p className="error-line">{connectError}</p>}
+      </PixelPanel>
+      <div className="mini-office">
+        <ByteDrone />
+        <div className="neon-sign">USDC GAS / ARC FINALITY</div>
       </div>
     </div>
   );
 }
 
 function NetworkGate({
-  onSwitch,
   address,
+  onSwitch,
 }: {
-  onSwitch(): void;
   address?: string;
+  onSwitch(): void;
 }) {
   return (
-    <div className="mx-auto grid min-h-[78vh] max-w-4xl place-items-center">
-      <PixelPanel className="max-w-2xl text-center">
-        <Terminal className="mx-auto text-cyan-300" size={42} />
-        <h1 className="pixel-title mt-5">Wrong signal. Arc Testnet required.</h1>
-        <p className="mt-4 text-sm leading-7 text-cyan-100/75">
-          Wallet {shortAddress(address)} is connected, but the Bureau terminal
-          only accepts Arc Testnet, chain ID 5042002, with USDC as native gas.
-        </p>
-        <button className="pixel-button mx-auto mt-7" onClick={onSwitch}>
+    <div className="gate-layout">
+      <PixelPanel className="terminal-card">
+        <p className="kicker">Wrong Network</p>
+        <h1>Switch to Arc Testnet</h1>
+        <div className="terminal-readout">
+          <p>&gt; wallet: {shortAddress(address)}</p>
+          <p>&gt; required chain: 5042002</p>
+          <p>&gt; explorer: testnet.arcscan.app</p>
+        </div>
+        <button className="pixel-button" onClick={onSwitch}>
           <CircleDollarSign size={18} />
           Switch to Arc Testnet
         </button>
@@ -903,99 +930,97 @@ function NetworkGate({
   );
 }
 
-function ProfileCreation({
-  form,
-  avatarURI,
-  setForm,
-  onSubmit,
-  pending,
-  error,
-  address,
-}: {
-  form: { x: string; nickname: string; motto: string };
-  avatarURI: string;
-  setForm(value: { x: string; nickname: string; motto: string }): void;
-  onSubmit(event: FormEvent): void;
-  pending: boolean;
-  error: string;
-  address?: string;
-}) {
+function LoadingTerminal({ text }: { text: string }) {
   return (
-    <div className="mx-auto grid min-h-[78vh] max-w-5xl items-center gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-      <PixelPanel>
-        <p className="kicker">Detective Profile</p>
-        <h1 className="pixel-title">Register your badge on Arc.</h1>
-        <p className="mt-4 text-sm leading-7 text-cyan-100/75">
-          One profile per wallet. X usernames are unique onchain. Your avatar URI
-          points to Unavatar; no images or base64 are stored onchain.
-        </p>
-        <div className="mt-6 flex items-center gap-4">
-          <Avatar uri={avatarURI} fallback={form.x || address || "AD"} />
-          <div>
-            <p className="font-mono text-xs text-cyan-300">BADGE PREVIEW</p>
-            <p className="mt-1 text-lg font-black text-white">
-              {form.nickname || "Rookie Arctective"}
-            </p>
-            <p className="text-sm text-cyan-100/70">@{form.x || "username"}</p>
-          </div>
-        </div>
-      </PixelPanel>
-      <PixelPanel>
-        <form className="space-y-4" onSubmit={onSubmit}>
-          <Field
-            label="X username"
-            value={form.x}
-            onChange={(x) => setForm({ ...form, x })}
-            placeholder="nxrskyaa"
-          />
-          <Field
-            label="Detective nickname"
-            value={form.nickname}
-            onChange={(nickname) => setForm({ ...form, nickname })}
-            placeholder="Receipt Hunter"
-          />
-          <Field
-            label="Motto / title"
-            value={form.motto}
-            onChange={(motto) => setForm({ ...form, motto })}
-            placeholder="Receipts remember."
-          />
-          {error && <p className="text-xs text-red-300">{error}</p>}
-          <button className="pixel-button w-full" disabled={pending}>
-            <BadgeCheck size={18} />
-            {pending ? "Registering Badge..." : "Create Detective Profile"}
-          </button>
-        </form>
+    <div className="gate-layout">
+      <PixelPanel className="terminal-card">
+        <p className="kicker">Bureau Terminal</p>
+        <h1>{text}</h1>
+        <div className="loading-pulse" />
       </PixelPanel>
     </div>
   );
 }
 
-function RookieBadge({ onEnter, txHash }: { onEnter(): void; txHash: string }) {
+function ProfileCreation({
+  address,
+  avatarURI,
+  error,
+  form,
+  pending,
+  setForm,
+  onSubmit,
+}: {
+  address?: string;
+  avatarURI: string;
+  error: string;
+  form: { x: string; nickname: string; motto: string };
+  pending: boolean;
+  setForm(value: { x: string; nickname: string; motto: string }): void;
+  onSubmit(event: FormEvent): void;
+}) {
   return (
-    <div className="mx-auto grid min-h-[78vh] max-w-3xl place-items-center text-center">
-      <PixelPanel>
+    <div className="registration-layout">
+      <PixelPanel className="terminal-card">
+        <p className="kicker">Arc Detective Bureau Registration</p>
+        <h1>Register Detective Badge</h1>
+        <form className="terminal-form" onSubmit={onSubmit}>
+          <Field
+            label="X username"
+            placeholder="nxrskyaa"
+            value={form.x}
+            onChange={(x) => setForm({ ...form, x })}
+          />
+          <Field
+            label="Detective nickname"
+            placeholder="Receipt Hunter"
+            value={form.nickname}
+            onChange={(nickname) => setForm({ ...form, nickname })}
+          />
+          <Field
+            label="Motto / title"
+            placeholder="Receipts remember."
+            value={form.motto}
+            onChange={(motto) => setForm({ ...form, motto })}
+          />
+          {error && <p className="error-line">{error}</p>}
+          <button className="pixel-button amber" disabled={pending}>
+            <BadgeCheck size={18} />
+            {pending ? "Registering..." : "Register Detective Badge"}
+          </button>
+        </form>
+      </PixelPanel>
+      <div className="badge-preview">
+        <p>Arc City Bureau</p>
+        <Avatar uri={avatarURI} fallback={form.x || address || "AD"} large />
+        <h2>{form.nickname || "Rookie Arctective"}</h2>
+        <span>@{form.x || "username"}</span>
+        <small>{shortAddress(address)}</small>
+        <em>{form.motto || "Receipts remember."}</em>
+        <strong>Rookie Arctective</strong>
+      </div>
+    </div>
+  );
+}
+
+function RookieBadge({ txHash, onEnter }: { txHash: string; onEnter(): void }) {
+  return (
+    <div className="center-stage">
+      <PixelPanel className="success-card">
         <motion.div
-          className="case-stamp mx-auto"
-          initial={{ scale: 2.2, opacity: 0, rotate: -10 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          className="case-stamp"
+          initial={{ opacity: 0, scale: 2, rotate: -8 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
         >
           Rookie Arctective Registered
         </motion.div>
-        <p className="mt-6 text-cyan-100/75">
-          Your badge is now bound to Arc. The Bureau doors unlock.
-        </p>
         {txHash && (
-          <a
-            className="mt-4 block font-mono text-xs text-cyan-300 underline"
-            href={`${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}`}
-            target="_blank"
-          >
+          <a href={`${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}`} target="_blank">
             View registration on ArcScan
           </a>
         )}
-        <button className="pixel-button mx-auto mt-7" onClick={onEnter}>
-          Enter Arc Detective Bureau
+        <button className="pixel-button" onClick={onEnter}>
+          Enter Bureau
         </button>
       </PixelPanel>
     </div>
@@ -1003,255 +1028,463 @@ function RookieBadge({ onEnter, txHash }: { onEnter(): void; txHash: string }) {
 }
 
 function BureauHub({
+  address,
+  badges,
   profile,
+  solved,
   onNavigate,
-  solvedCount,
 }: {
+  address?: string;
+  badges: number[];
   profile?: DetectiveProfile;
+  solved: number[];
   onNavigate(screen: Screen): void;
-  solvedCount: number;
 }) {
   const zones = [
-    { screen: "caseDesk" as Screen, label: "Case Desk", icon: BriefcaseBusiness },
-    { screen: "board" as Screen, label: "Evidence Board", icon: ClipboardCheck },
-    { screen: "arcTerminal" as Screen, label: "Arc Terminal", icon: Terminal },
-    { screen: "profileView" as Screen, label: "Profile Badge", icon: UserRound },
-    { screen: "leaderboard" as Screen, label: "Leaderboard", icon: Trophy },
-    { screen: "archive" as Screen, label: "Archive", icon: BookOpen },
+    { label: "Case Desk", screen: "caseDesk" as Screen, Icon: BriefcaseBusiness },
+    { label: "Evidence Board", screen: "board" as Screen, Icon: ClipboardCheck },
+    { label: "Arc Terminal", screen: "arcTerminal" as Screen, Icon: Terminal },
+    { label: "Profile Badge", screen: "profileView" as Screen, Icon: UserRound },
+    { label: "Leaderboard", screen: "leaderboard" as Screen, Icon: Trophy },
+    { label: "Archive", screen: "archive" as Screen, Icon: BookOpen },
   ];
 
   return (
-    <div className="hub-shell">
-      <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-        <div>
-          <p className="kicker">Arc Detective Bureau</p>
-          <h1 className="pixel-title">Every payment leaves a clue.</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-cyan-100/75">
-            Mara Voss watches the case board. Byte circles the terminal. The Null
-            Clerk is already inside the receipts.
-          </p>
+    <div>
+      <GameTopBar
+        address={address}
+        location="Arc Detective Bureau"
+        profile={profile}
+      />
+      <div className="hub-grid">
+        <ObjectivePanel
+          clues={0}
+          phase="bureau"
+          boardSolved={false}
+          timelineSolved={false}
+        />
+        <div className="bureau-map">
+          <MaraPortrait />
+          <ByteDrone />
+          <div className="bureau-window" />
+          {zones.map(({ label, screen, Icon }, index) => (
+            <button
+              className={`bureau-zone bureau-zone-${index}`}
+              key={label}
+              onClick={() => onNavigate(screen)}
+            >
+              <Icon size={22} />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
-        <div className="mini-badge">
-          <Avatar uri={profile?.avatarURI} fallback={profile?.nickname ?? "A"} />
-          <div>
-            <p className="text-sm font-black">{profile?.nickname ?? "Detective"}</p>
-            <p className="font-mono text-xs text-cyan-300">
-              {rankTitle(profile?.reputation)} / {solvedCount} closed
-            </p>
-          </div>
-        </div>
+        <BytePanel line="Case 1 is active. Open the Case Desk." />
       </div>
-      <div className="bureau-room">
-        {zones.map(({ screen, label, icon: Icon }, index) => (
-          <motion.button
-            key={label}
-            className={`hub-zone hub-zone-${index}`}
-            whileHover={{ y: -5, boxShadow: "0 0 28px rgba(82,245,255,.42)" }}
-            onClick={() => onNavigate(screen)}
-          >
-            <Icon size={22} />
-            {label}
-          </motion.button>
-        ))}
+      <EvidenceTray clues={[]} selected={null} used={[]} onSelect={() => null} />
+      <div className="profile-strip">
+        <Avatar uri={profile?.avatarURI} fallback={profile?.nickname ?? "A"} />
+        <strong>{profile?.nickname ?? "Detective"}</strong>
+        <span>@{profile?.xUsername ?? "unknown"}</span>
+        <span>{rankTitle(profile?.reputation)}</span>
+        <span>{solved.length} cases</span>
+        <span>{badges.length} badges</span>
       </div>
     </div>
   );
 }
 
 function CaseDesk({
-  cases,
-  solved,
+  caseSolved,
   onBack,
   onStart,
 }: {
-  cases: CaseFile[];
-  solved: number[];
+  caseSolved: boolean;
   onBack(): void;
-  onStart(caseId: number): void;
+  onStart(): void;
 }) {
   return (
     <div>
-      <TopBar title="Case Desk" onBack={onBack} />
-      <div className="case-grid">
-        {cases.map((caseFile) => (
-          <PixelPanel key={caseFile.id} className="case-file">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-mono text-xs text-cyan-300">
-                  CASE {caseFile.id.toString().padStart(2, "0")}
-                </p>
-                <h2 className="mt-2 text-2xl font-black text-white">
-                  {caseFile.title}
-                </h2>
-              </div>
-              {solved.includes(caseFile.id) && <Medal className="text-cyan-300" />}
-            </div>
-            <p className="mt-4 text-sm leading-7 text-cyan-100/75">
-              {caseFile.briefing}
-            </p>
-            <p className="mt-4 font-mono text-xs text-cyan-300">{caseFile.theme}</p>
-            <button className="pixel-button mt-6 w-full" onClick={() => onStart(caseFile.id)}>
-              {solved.includes(caseFile.id) ? "Review Case" : "Open File"}
-            </button>
-          </PixelPanel>
-        ))}
+      <BackBar title="Case Desk" onBack={onBack} />
+      <div className="case-desk-layout">
+        <div className="case-folder playable">
+          <span>CASE 01</span>
+          <h1>{CASE_TITLE}</h1>
+          <p>Merchant terminal says pending. Receipt says final.</p>
+          <button className="pixel-button" onClick={onStart}>
+            {caseSolved ? "Review Investigation" : "Start Case"}
+          </button>
+        </div>
+        <div className="case-folder locked">
+          <span>CASE 02</span>
+          <h2>The Agent Who Paid Twice</h2>
+          <p>Locked until Case 1 is polished.</p>
+        </div>
+        <div className="case-folder locked">
+          <span>CASE 03</span>
+          <h2>The Private Ledger Room</h2>
+          <p>Locked until Case 1 is polished.</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function CaseScene({
-  caseFile,
-  discoveredIds,
-  solved,
-  onDiscover,
-  onBoard,
-  onBack,
+function TutorialScreen({
+  step,
+  onStep,
+  onComplete,
 }: {
-  caseFile: CaseFile;
-  discoveredIds: string[];
-  solved: boolean;
-  onDiscover(id: string): void;
-  onBoard(): void;
-  onBack(): void;
+  step: number;
+  onStep(step: number): void;
+  onComplete(): void;
 }) {
-  const allFound = caseFile.evidence.every((item) => discoveredIds.includes(item.id));
+  const lines = [
+    "Tap glowing objects to inspect them.",
+    "Clues slide into your evidence tray.",
+    "Open evidence when you build the case.",
+    "Place clues where they belong.",
+    "Good. Now solve the real case.",
+  ];
 
   return (
     <div>
-      <TopBar title={caseFile.title} onBack={onBack} />
-      <div className="case-scene">
-        <div className="scene-stage">
-          <div className="npc-card">
-            <div className="npc-portrait" />
-            <div>
-              <p className="font-mono text-xs text-cyan-300">{caseFile.npc}</p>
-              <p className="mt-2 text-sm text-cyan-50">
-                &ldquo;{caseFile.npcLine}&rdquo;
-              </p>
-            </div>
-          </div>
-          {caseFile.evidence.map((item, index) => (
-            <motion.button
-              key={item.id}
-              className={`hotspot hotspot-${index} ${
-                discoveredIds.includes(item.id) ? "found" : ""
-              }`}
-              onClick={() => onDiscover(item.id)}
-              whileTap={{ scale: 0.9 }}
-            >
-              <Sparkles size={16} />
-              {discoveredIds.includes(item.id) ? item.title : "Inspect"}
-            </motion.button>
-          ))}
-        </div>
-        <PixelPanel>
-          <p className="kicker">Byte says</p>
-          <h2 className="mt-2 text-xl font-black">
-            I found three receipts. Two are real. One is trying too hard.
-          </h2>
-          <p className="mt-4 text-sm leading-7 text-cyan-100/75">
-            {caseFile.lesson} Collect every clue, then wire the truth on the
-            evidence board.
-          </p>
-          <p className="mt-3 font-mono text-xs text-cyan-300">
-            {allFound ? "CASE UPDATED: all clues recovered" : "Find every clue to complete the file"}
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {caseFile.evidence.map((item) => (
-              <div
-                className={`inventory-chip ${
-                  discoveredIds.includes(item.id) ? "active" : ""
-                }`}
-                key={item.id}
-              >
-                {item.icon} {item.title}
-              </div>
-            ))}
-          </div>
-          <button className="pixel-button mt-6 w-full" disabled={!discoveredIds.length} onClick={onBoard}>
-            Open Evidence Board
+      <BackBar title="Byte Field Drill" onBack={onComplete} />
+      <div className="tutorial-grid">
+        <div className="tutorial-scene">
+          <ByteDrone />
+          <button
+            className={`tutorial-receipt ${step === 0 ? "targeted" : "collected"}`}
+            onClick={() => onStep(Math.max(step, 1))}
+          >
+            <ReceiptText size={28} />
           </button>
-          {solved && <p className="mt-4 text-xs text-cyan-300">Case already closed on Arc.</p>}
+          <div className={`tutorial-tray ${step >= 1 ? "lit" : ""}`}>
+            Evidence Tray
+          </div>
+          <div className={`tutorial-board ${step >= 3 ? "lit" : ""}`}>
+            Payment Trail
+          </div>
+        </div>
+        <PixelPanel className="tutorial-panel">
+          <ByteDrone small />
+          <p className="kicker">Byte Tutorial</p>
+          <h1>{lines[Math.min(step, lines.length - 1)]}</h1>
+          {step === 0 && <p>Click the receipt on the desk.</p>}
+          {step === 1 && (
+            <button className="pixel-button" onClick={() => onStep(2)}>
+              View Evidence Tray
+            </button>
+          )}
+          {step === 2 && (
+            <button className="pixel-button" onClick={() => onStep(3)}>
+              Open Board
+            </button>
+          )}
+          {step === 3 && (
+            <button className="pixel-button" onClick={() => onStep(4)}>
+              Place Tutorial Clue
+            </button>
+          )}
+          {step >= 4 && (
+            <button className="pixel-button amber" onClick={onComplete}>
+              Start Real Case
+            </button>
+          )}
         </PixelPanel>
       </div>
+    </div>
+  );
+}
+
+function InvestigationScreen({
+  address,
+  byteLine,
+  canOpenBoard,
+  clues,
+  lastFound,
+  profile,
+  onBack,
+  onBoard,
+  onCollect,
+}: {
+  address?: string;
+  byteLine: string;
+  canOpenBoard: boolean;
+  clues: ClueId[];
+  lastFound: ClueId | null;
+  profile?: DetectiveProfile;
+  onBack(): void;
+  onBoard(): void;
+  onCollect(clue: ClueId): void;
+}) {
+  return (
+    <div>
+      <GameTopBar address={address} location={CASE_TITLE} profile={profile} />
+      <div className="gameplay-layout">
+        <ObjectivePanel
+          boardSolved={false}
+          clues={clues.length}
+          phase="investigation"
+          timelineSolved={false}
+        />
+        <MerchantScene clues={clues} lastFound={lastFound} onCollect={onCollect} />
+        <BytePanel
+          line={byteLine}
+          action={
+            <button className="pixel-button" disabled={!canOpenBoard} onClick={onBoard}>
+              Open Evidence Board
+            </button>
+          }
+        />
+      </div>
+      <EvidenceTray clues={clues} selected={null} used={[]} onSelect={() => null} />
+      <button className="back-button floating-back" onClick={onBack}>
+        Case Desk
+      </button>
+    </div>
+  );
+}
+
+function MerchantScene({
+  clues,
+  lastFound,
+  onCollect,
+}: {
+  clues: ClueId[];
+  lastFound: ClueId | null;
+  onCollect(clue: ClueId): void;
+}) {
+  return (
+    <div className="scene-viewport">
+      <div className="alley-window">
+        <span>ARC PAY / USDC</span>
+      </div>
+      <div className="merchant-counter" />
+      <div className="juno-sprite">
+        <div className="juno-head" />
+        <div className="juno-apron" />
+        <div className="juno-scanner" />
+        <small>Juno Pay</small>
+      </div>
+      <div className="detective-sprite">
+        <div className="detective-hat" />
+        <div className="detective-coat" />
+        <div className="arc-badge" />
+      </div>
+      <div className="npc-silhouette" />
+      <div className="rain-window-lines" />
+      {HOTSPOTS.map(({ id, label, clue, className, Icon }) => {
+        const inspected = clues.includes(clue);
+        return (
+          <motion.button
+            className={`scene-hotspot ${className} ${inspected ? "inspected" : ""}`}
+            key={id}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => onCollect(clue)}
+          >
+            <Icon size={18} />
+            <span>{inspected ? "Checked" : label}</span>
+            {inspected && <Check size={14} />}
+          </motion.button>
+        );
+      })}
+      <AnimatePresence>
+        {lastFound && (
+          <motion.div
+            className="clue-reveal"
+            initial={{ opacity: 0, y: 28, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20 }}
+          >
+            <span>{CLUES[lastFound].icon}</span>
+            <strong>{CLUES[lastFound].title}</strong>
+            <small>{CLUES[lastFound].text}</small>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function EvidenceBoard({
-  caseFile,
-  discoveredIds,
+  clues,
   placements,
-  correctCount,
-  onPlace,
+  selectedClue,
+  wrongSlot,
   onBack,
-  onTerminal,
+  onPlace,
+  onReset,
+  onSelect,
+  onTimeline,
 }: {
-  caseFile: CaseFile;
-  discoveredIds: string[];
-  placements: Record<string, string>;
-  correctCount: number;
-  onPlace(slot: EvidenceSlot, evidenceId: string): void;
+  clues: ClueId[];
+  placements: Record<BoardSlot, ClueId | null>;
+  selectedClue: ClueId | null;
+  wrongSlot: BoardSlot | null;
   onBack(): void;
-  onTerminal(): void;
+  onPlace(slot: BoardSlot): void;
+  onReset(): void;
+  onSelect(clue: ClueId): void;
+  onTimeline(): void;
 }) {
-  const discoveredEvidence = caseFile.evidence.filter((item) =>
-    discoveredIds.includes(item.id),
-  );
+  const used = Object.values(placements).filter(Boolean) as ClueId[];
+  const boardSolved = BOARD_SLOTS.every((slot) => placements[slot]);
 
   return (
     <div>
-      <TopBar title="Evidence Board" onBack={onBack} />
-      <div className="board-layout">
-        <PixelPanel>
-          <p className="kicker">Evidence Inventory</p>
-          <div className="mt-5 space-y-3">
-            {discoveredEvidence.map((item) => (
-              <div
-                className="evidence-card"
-                draggable
-                onDragStart={(event) => event.dataTransfer.setData("text/plain", item.id)}
-                key={item.id}
-              >
-                <span>{item.icon}</span>
-                <div>
-                  <p>{item.title}</p>
-                  <small>{item.text}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-        </PixelPanel>
-        <div className="evidence-board">
-          {slots.map((slot) => {
-            const evidence = caseFile.evidence.find((item) => item.id === placements[slot]);
-            const correct = evidence?.slot === slot;
+      <BackBar title="Evidence Board" onBack={onBack} />
+      <div className="board-game-layout">
+        <ObjectivePanel
+          boardSolved={boardSolved}
+          clues={clues.length}
+          phase="board"
+          timelineSolved={false}
+        />
+        <div className="cork-board">
+          <div className="board-strings" />
+          {BOARD_SLOTS.map((slot) => {
+            const clue = placements[slot];
             return (
-              <div
-                className={`board-slot ${correct ? "correct" : ""}`}
+              <button
+                className={`case-slot ${clue ? "locked" : ""} ${
+                  wrongSlot === slot ? "shake" : ""
+                }`}
                 key={slot}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => onPlace(slot, event.dataTransfer.getData("text/plain"))}
+                onClick={() => onPlace(slot)}
               >
-                <p>{slot}</p>
-                {evidence ? <span>{evidence.title}</span> : <small>Drop clue</small>}
-              </div>
+                <span>{slot}</span>
+                {clue ? (
+                  <strong>{CLUES[clue].title}</strong>
+                ) : (
+                  <small>{selectedClue ? "Place selected clue" : "Select clue first"}</small>
+                )}
+              </button>
             );
           })}
-          <div className="string-line line-a" />
-          <div className="string-line line-b" />
-          <div className="string-line line-c" />
         </div>
+        <BytePanel
+          line={
+            boardSolved
+              ? "Board solved. Reconstruct the timeline."
+              : selectedClue
+                ? `${CLUES[selectedClue].title} selected. Pick a slot.`
+                : "Select a clue, then tap a board slot."
+          }
+          action={
+            <div className="stack-actions">
+              <button className="pixel-button" disabled={!boardSolved} onClick={onTimeline}>
+                Reconstruct Case
+              </button>
+              <button className="back-button" onClick={onReset}>
+                Clear Board
+              </button>
+            </div>
+          }
+        />
+      </div>
+      <EvidenceTray clues={clues} selected={selectedClue} used={used} onSelect={onSelect} />
+    </div>
+  );
+}
+
+function TimelineScreen({
+  byteLine,
+  shake,
+  solved,
+  tiles,
+  onBack,
+  onCheck,
+  onMove,
+  onReport,
+}: {
+  byteLine: string;
+  shake: boolean;
+  solved: boolean;
+  tiles: string[];
+  onBack(): void;
+  onCheck(): void;
+  onMove(index: number, direction: -1 | 1): void;
+  onReport(): void;
+}) {
+  return (
+    <div>
+      <BackBar title="Timeline Reconstruction" onBack={onBack} />
+      <div className="timeline-layout">
+        <ObjectivePanel
+          boardSolved
+          clues={6}
+          phase="timeline"
+          timelineSolved={solved}
+        />
+        <div className={`timeline-machine ${shake ? "shake" : ""}`}>
+          {tiles.map((tile, index) => (
+            <div className={`timeline-tile ${solved ? "locked" : ""}`} key={tile}>
+              <span>0{index + 1}</span>
+              <strong>{tile}</strong>
+              <div>
+                <button className="back-button" onClick={() => onMove(index, -1)}>
+                  Up
+                </button>
+                <button className="back-button" onClick={() => onMove(index, 1)}>
+                  Down
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <BytePanel
+          line={solved ? "Timeline reconstructed." : byteLine}
+          action={
+            solved ? (
+              <button className="pixel-button amber" onClick={onReport}>
+                Open Final Report
+              </button>
+            ) : (
+              <button className="pixel-button" onClick={onCheck}>
+                Check Timeline
+              </button>
+            )
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function FinalReport({
+  error,
+  pending,
+  profile,
+  onBack,
+  onClose,
+}: {
+  error: string;
+  pending: boolean;
+  profile?: DetectiveProfile;
+  onBack(): void;
+  onClose(): void;
+}) {
+  return (
+    <div>
+      <BackBar title="Final Case Report" onBack={onBack} />
+      <div className="final-report">
         <PixelPanel>
-          <p className="kicker">Board Status</p>
-          <h2 className="mt-2 text-2xl font-black">{correctCount}/5 wired</h2>
-          <p className="mt-4 text-sm leading-7 text-cyan-100/75">
-            Correct clues glow. When every slot is wired, Byte unlocks the
-            deduction terminal.
-          </p>
-          <button className="pixel-button mt-6 w-full" disabled={correctCount < 5} onClick={onTerminal}>
-            Unlock Deduction Terminal
+          <p className="kicker">Case Report Ready</p>
+          <h1>{CASE_TITLE}</h1>
+          <div className="report-grid">
+            <span>Payment status</span>
+            <strong>Settled</strong>
+            <span>Dispute cause</span>
+            <strong>Stale merchant backend</strong>
+            <span>Final proof</span>
+            <strong>Arc settlement timestamp</strong>
+            <span>Detective</span>
+            <strong>{profile?.nickname ?? "Arctective"}</strong>
+          </div>
+          {error && <p className="error-line">{error}</p>}
+          <button className="pixel-button amber" disabled={pending} onClick={onClose}>
+            <ShieldCheck size={18} />
+            {pending ? "Filing final receipt on Arc..." : "Close Case on Arc"}
           </button>
         </PixelPanel>
       </div>
@@ -1259,153 +1492,199 @@ function EvidenceBoard({
   );
 }
 
-function DeductionTerminal({
-  caseFile,
-  answers,
-  setAnswers,
-  onBack,
-  onSolve,
-  pending,
-  error,
+function CaseClosed({
+  profile,
+  txHash,
+  onHub,
 }: {
-  caseFile: CaseFile;
-  answers: string[];
-  setAnswers(answers: string[]): void;
-  onBack(): void;
-  onSolve(): void;
-  pending: boolean;
-  error: string;
+  profile?: DetectiveProfile;
+  txHash: string;
+  onHub(): void;
 }) {
-  const questions = [
-    "What really happened?",
-    "Which evidence proves it?",
-    "Which wallet / agent / system caused the issue?",
-    "What Arc concept makes the case resolvable?",
-    "Should the case be marked solved?",
-  ];
-
   return (
-    <div>
-      <TopBar title="Deduction Terminal" onBack={onBack} />
-      <PixelPanel className="mx-auto max-w-4xl">
-        <p className="kicker">Arc Proof Console</p>
-        <h1 className="pixel-title mt-2">{caseFile.title}</h1>
-        <div className="mt-6 space-y-4">
-          {questions.map((question, index) => (
-            <label className="block" key={question}>
-              <span className="mb-2 block font-mono text-xs text-cyan-300">
-                {index + 1}. {question}
-              </span>
-              <input
-                className="terminal-input"
-                value={answers[index]}
-                onChange={(event) => {
-                  const next = [...answers];
-                  next[index] = event.target.value;
-                  setAnswers(next);
-                }}
-                placeholder={index === 4 ? "yes" : "Type deduction..."}
-              />
-            </label>
-          ))}
+    <div className="center-stage">
+      <PixelPanel className="case-closed-card">
+        <motion.div
+          className="case-stamp"
+          initial={{ opacity: 0, scale: 2, rotate: -10 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+        >
+          CASE CLOSED ON ARC
+        </motion.div>
+        <div className="closed-profile">
+          <Avatar uri={profile?.avatarURI} fallback={profile?.nickname ?? "A"} />
+          <div>
+            <p>Detective</p>
+            <strong>{profile?.nickname ?? "Arctective"}</strong>
+          </div>
         </div>
-        {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
-        <button className="pixel-button mt-6 w-full" disabled={pending} onClick={onSolve}>
-          <ShieldCheck size={18} />
-          {pending ? "Submitting Case Proof..." : "Submit Case Proof on Arc"}
-        </button>
+        <div className="share-card">
+          <p>ARCTECTIVE CASE CLOSED</p>
+          <strong>{CASE_TITLE}</strong>
+          <span>Payment was settled. Merchant terminal was stale.</span>
+          <em>Badge unlocked: {badgeNames[ARCTECTIVE_BADGES.FINAL_RECEIPT_FOUND]}</em>
+        </div>
+        {txHash && (
+          <a href={`${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}`} target="_blank">
+            Arc Proof: {shortAddress(txHash)}
+          </a>
+        )}
+        <div className="closed-actions">
+          <button className="pixel-button" onClick={onHub}>
+            Return to Bureau
+          </button>
+          <button className="back-button">Share Case Card</button>
+        </div>
       </PixelPanel>
     </div>
   );
 }
 
-function CaseClosed({
-  caseFile,
-  txHash,
-  onHub,
+function GameTopBar({
+  address,
+  location,
+  profile,
 }: {
-  caseFile: CaseFile;
-  txHash: string;
-  onHub(): void;
+  address?: string;
+  location: string;
+  profile?: DetectiveProfile;
 }) {
   return (
-    <div className="mx-auto grid min-h-[78vh] max-w-4xl place-items-center text-center">
-      <PixelPanel>
-        <motion.div
-          className="case-stamp mx-auto"
-          initial={{ scale: 2, opacity: 0, rotate: -12 }}
-          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-        >
-          CASE CLOSED ON ARC
-        </motion.div>
-        <h1 className="pixel-title mt-7">{caseFile.title}</h1>
-        <p className="mt-4 text-cyan-100/75">
-          Badge unlocked: {badgeNames[caseFile.badge]}. Score {caseFile.score}.
-        </p>
-        <div className="share-card mt-6">
-          <p>ARCTECTIVE CASE FILE</p>
-          <strong>{caseFile.title}</strong>
-          <span>{caseFile.lesson}</span>
+    <div className="top-status-bar">
+      <strong>ARCTECTIVE</strong>
+      <span>{location}</span>
+      <span>Arc Testnet</span>
+      <span>{shortAddress(address)}</span>
+      <span>{Number(profile?.reputation ?? 0)} REP</span>
+    </div>
+  );
+}
+
+function ObjectivePanel({
+  boardSolved,
+  clues,
+  phase,
+  timelineSolved,
+}: {
+  boardSolved: boolean;
+  clues: number;
+  phase: "bureau" | "investigation" | "board" | "timeline";
+  timelineSolved: boolean;
+}) {
+  const items = [
+    { label: "Inspect scene", done: phase !== "bureau" && clues > 0 },
+    { label: "Collect 4 clues", done: clues >= 4 },
+    { label: "Open board", done: phase === "board" || phase === "timeline" },
+    { label: "Reconstruct timeline", done: timelineSolved },
+    { label: "Close case on Arc", done: false },
+  ];
+  return (
+    <aside className="objective-panel">
+      <p className="kicker">Objectives</p>
+      <strong>{clues}/6 clues</strong>
+      {items.map((item) => (
+        <div className={item.done ? "done" : ""} key={item.label}>
+          <span>{item.done ? "✓" : "□"}</span>
+          {item.label}
         </div>
-        {txHash && (
-          <a
-            className="mt-5 block font-mono text-xs text-cyan-300 underline"
-            href={`${ARC_TESTNET.blockExplorers.default.url}/tx/${txHash}`}
-            target="_blank"
+      ))}
+      {boardSolved && <small>Board locked. Timeline unlocked.</small>}
+    </aside>
+  );
+}
+
+function BytePanel({
+  line,
+  action,
+}: {
+  line: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <aside className="byte-panel">
+      <ByteDrone />
+      <p className="kicker">Hint</p>
+      <strong>{line}</strong>
+      {action && <div className="byte-action">{action}</div>}
+    </aside>
+  );
+}
+
+function EvidenceTray({
+  clues,
+  selected,
+  used,
+  onSelect,
+}: {
+  clues: ClueId[];
+  selected: ClueId | null;
+  used: ClueId[];
+  onSelect(clue: ClueId): void;
+}) {
+  return (
+    <div className="evidence-tray">
+      <span>Evidence Tray</span>
+      {clues.length === 0 && <small>No clues yet.</small>}
+      {clues.map((clueId) => {
+        const clue = CLUES[clueId];
+        return (
+          <button
+            className={`tray-card ${selected === clueId ? "selected" : ""} ${
+              used.includes(clueId) ? "used" : ""
+            }`}
+            key={clueId}
+            onClick={() => onSelect(clueId)}
           >
-            {shortAddress(txHash)}
-          </a>
-        )}
-        <button className="pixel-button mx-auto mt-7" onClick={onHub}>
-          Return to Bureau
-        </button>
-      </PixelPanel>
+            <em>{clue.icon}</em>
+            <strong>{clue.title}</strong>
+            <small>{used.includes(clueId) ? "used" : "new"}</small>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function BackBar({ title, onBack }: { title: string; onBack(): void }) {
+  return (
+    <div className="backbar">
+      <button className="back-button" onClick={onBack}>
+        Back
+      </button>
+      <strong>{title}</strong>
     </div>
   );
 }
 
 function ProfileScreen({
-  profile,
   address,
-  solved,
   badges,
+  profile,
+  solved,
   onBack,
 }: {
-  profile?: DetectiveProfile;
   address?: string;
-  solved: number[];
   badges: number[];
+  profile?: DetectiveProfile;
+  solved: number[];
   onBack(): void;
 }) {
   return (
     <div>
-      <TopBar title="Profile Badge" onBack={onBack} />
-      <PixelPanel className="mx-auto max-w-3xl">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-          <Avatar uri={profile?.avatarURI} fallback={profile?.nickname ?? address ?? "A"} large />
-          <div>
-            <p className="kicker">{rankTitle(profile?.reputation)}</p>
-            <h1 className="pixel-title">{profile?.nickname ?? "Detective"}</h1>
-            <p className="mt-2 text-cyan-100/75">@{profile?.xUsername ?? "unknown"}</p>
-            <p className="mt-1 font-mono text-xs text-cyan-300">{shortAddress(address)}</p>
-          </div>
+      <BackBar title="Profile Badge" onBack={onBack} />
+      <div className="badge-preview profile-view">
+        <Avatar uri={profile?.avatarURI} fallback={profile?.nickname ?? address ?? "A"} large />
+        <h2>{profile?.nickname ?? "Detective"}</h2>
+        <span>@{profile?.xUsername ?? "unknown"}</span>
+        <small>{shortAddress(address)}</small>
+        <em>{profile?.motto ?? "Receipts remember."}</em>
+        <strong>{rankTitle(profile?.reputation)}</strong>
+        <div className="profile-metrics">
+          <span>{Number(profile?.reputation ?? 0)} REP</span>
+          <span>{solved.length} cases</span>
+          <span>{badges.length} badges</span>
         </div>
-        <p className="mt-6 text-lg text-cyan-50">
-          &ldquo;{profile?.motto ?? "Receipts remember."}&rdquo;
-        </p>
-        <div className="stat-grid mt-6">
-          <Stat label="Reputation" value={Number(profile?.reputation ?? 0).toString()} />
-          <Stat label="Cases Solved" value={solved.length.toString()} />
-          <Stat label="Badges" value={badges.length.toString()} />
-        </div>
-        <div className="mt-6 flex flex-wrap gap-3">
-          {badges.map((badge) => (
-            <span className="badge-pill" key={badge}>
-              {badgeNames[badge] ?? `Badge ${badge}`}
-            </span>
-          ))}
-        </div>
-      </PixelPanel>
+      </div>
     </div>
   );
 }
@@ -1419,21 +1698,20 @@ function LeaderboardScreen({
 }) {
   return (
     <div>
-      <TopBar title="Detective Ranking Board" onBack={onBack} />
-      <PixelPanel className="mx-auto max-w-5xl">
-        <div className="space-y-3">
+      <BackBar title="Leaderboard" onBack={onBack} />
+      <PixelPanel>
+        <div className="leader-list">
           {leaderboard.length ? (
             leaderboard.map((detective, index) => (
               <div className="leader-row" key={`${detective.wallet}-${index}`}>
                 <span>#{index + 1}</span>
                 <Avatar uri={detective.avatarURI} fallback={detective.nickname} />
                 <strong>{detective.nickname}</strong>
-                <small>@{detective.xUsername}</small>
                 <em>{Number(detective.reputation)} REP</em>
               </div>
             ))
           ) : (
-            <p className="text-cyan-100/75">No leaderboard entries returned yet.</p>
+            <p className="microcopy">No detectives returned yet.</p>
           )}
         </div>
       </PixelPanel>
@@ -1441,21 +1719,22 @@ function LeaderboardScreen({
   );
 }
 
-function ArchiveScreen({ solved, onBack }: { solved: number[]; onBack(): void }) {
+function ArchiveScreen({
+  caseSolved,
+  onBack,
+}: {
+  caseSolved: boolean;
+  onBack(): void;
+}) {
   return (
     <div>
-      <TopBar title="Archive" onBack={onBack} />
-      <div className="case-grid">
-        {CASES.map((caseFile) => (
-          <PixelPanel key={caseFile.id}>
-            <p className="kicker">Case {caseFile.id}</p>
-            <h2 className="mt-2 text-2xl font-black">{caseFile.title}</h2>
-            <p className="mt-4 text-sm text-cyan-100/75">{caseFile.lesson}</p>
-            <div className="mt-5 badge-pill">
-              {solved.includes(caseFile.id) ? "Closed on Arc" : "Unsolved"}
-            </div>
-          </PixelPanel>
-        ))}
+      <BackBar title="Archive" onBack={onBack} />
+      <div className="case-desk-layout">
+        <div className="case-folder playable">
+          <span>CASE 01</span>
+          <h1>{CASE_TITLE}</h1>
+          <p>{caseSolved ? "Closed on Arc." : "Still open."}</p>
+        </div>
       </div>
     </div>
   );
@@ -1464,53 +1743,38 @@ function ArchiveScreen({ solved, onBack }: { solved: number[]; onBack(): void })
 function ArcTerminalScreen({ onBack }: { onBack(): void }) {
   return (
     <div>
-      <TopBar title="Arc Terminal" onBack={onBack} />
-      <PixelPanel className="mx-auto max-w-4xl">
-        <div className="terminal-lines">
+      <BackBar title="Arc Terminal" onBack={onBack} />
+      <PixelPanel className="terminal-card">
+        <div className="terminal-readout">
           <p>&gt; network: Arc Testnet</p>
           <p>&gt; chain_id: 5042002</p>
-          <p>&gt; native_gas: USDC</p>
-          <p>&gt; finality: sub-second deterministic</p>
-          <p>&gt; evm: compatible</p>
+          <p>&gt; gas: USDC</p>
+          <p>&gt; finality: deterministic</p>
           <p>&gt; casebook: {ARCTECTIVE_CONTRACT_ADDRESS}</p>
-          <p>&gt; directive: solve financial mysteries, commit reputation.</p>
         </div>
       </PixelPanel>
     </div>
   );
 }
 
-function TopBar({ title, onBack }: { title: string; onBack(): void }) {
-  return (
-    <div className="mb-5 flex items-center justify-between gap-4">
-      <button className="back-button" onClick={onBack}>
-        Back
-      </button>
-      <h1 className="font-mono text-sm uppercase text-cyan-300">{title}</h1>
-    </div>
-  );
-}
-
 function Field({
   label,
-  value,
   placeholder,
+  value,
   onChange,
 }: {
   label: string;
-  value: string;
   placeholder: string;
+  value: string;
   onChange(value: string): void;
 }) {
   return (
-    <label className="block">
-      <span className="mb-2 block font-mono text-xs uppercase text-cyan-300">
-        {label}
-      </span>
+    <label>
+      <span>{label}</span>
       <input
         className="terminal-input"
-        value={value}
         placeholder={placeholder}
+        value={value}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>
@@ -1518,30 +1782,45 @@ function Field({
 }
 
 function Avatar({
-  uri,
   fallback,
   large = false,
+  uri,
 }: {
-  uri?: string;
   fallback: string;
   large?: boolean;
+  uri?: string;
 }) {
   return (
     <div className={large ? "avatar avatar-large" : "avatar"}>
-      {uri ? (
+      {uri && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={uri} alt="" onError={(event) => (event.currentTarget.style.display = "none")} />
-      ) : null}
+      )}
       <span>{fallback.slice(0, 2).toUpperCase()}</span>
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function ByteDrone({ small = false }: { small?: boolean }) {
   return (
-    <div className="stat">
-      <p>{label}</p>
-      <strong>{value}</strong>
+    <motion.div
+      className={small ? "byte-drone small" : "byte-drone"}
+      animate={{ y: [0, -8, 0], rotate: [0, 2, -1, 0] }}
+      transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+    >
+      <div className="byte-eye">••</div>
+    </motion.div>
+  );
+}
+
+function MaraPortrait() {
+  return (
+    <div className="mara-portrait">
+      <div className="mara-hair" />
+      <div className="mara-face" />
+      <div className="mara-coat" />
+      <div className="monocle" />
+      <span>Mara Voss</span>
     </div>
   );
 }
