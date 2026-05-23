@@ -8,7 +8,7 @@ import { ARC_TESTNET } from "@/lib/arctective";
 
 const config = createConfig({
   chains: [ARC_TESTNET],
-  connectors: [injected({ target: "metaMask" }), injected()],
+  connectors: [injected()],
   transports: {
     [ARC_TESTNET.id]: http(ARC_TESTNET.rpcUrls.default.http[0]),
   },

@@ -291,6 +291,14 @@ const badgeNames: Record<number, string> = {
   100: "Rookie Arctective",
 };
 
+function hasInjectedWallet() {
+  if (typeof window === "undefined") return false;
+  return Boolean(
+    (window as Window & { ethereum?: unknown }).ethereum ||
+      (window as Window & { phantom?: unknown }).phantom,
+  );
+}
+
 export default function Home() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -325,6 +333,7 @@ export default function Home() {
   const [sfx, setSfx] = useState(true);
   const [form, setForm] = useState({ x: "", nickname: "", motto: "" });
   const [formError, setFormError] = useState("");
+  const [walletAvailable, setWalletAvailable] = useState(() => hasInjectedWallet());
   const [lineIndex, setLineIndex] = useState(0);
 
   const isArc = chainId === ARC_TESTNET.id;
@@ -407,6 +416,20 @@ export default function Home() {
     }, 1500);
     return () => window.clearInterval(timer);
   }, [screen]);
+
+  useEffect(() => {
+    const updateWalletState = () =>
+      window.setTimeout(() => setWalletAvailable(hasInjectedWallet()), 0);
+    window.addEventListener("ethereum#initialized", updateWalletState, {
+      once: true,
+    });
+    window.addEventListener("focus", updateWalletState);
+    updateWalletState();
+    return () => {
+      window.removeEventListener("ethereum#initialized", updateWalletState);
+      window.removeEventListener("focus", updateWalletState);
+    };
+  }, []);
 
   useEffect(() => {
     if (isConnected && isArc && hasProfile && screen === "wallet") {
@@ -555,11 +578,18 @@ export default function Home() {
                 </p>
                 <button
                   className="pixel-button mt-6 w-full"
+                  disabled={!walletAvailable || !connectors[0]}
                   onClick={() => connect({ connector: connectors[0] })}
                 >
                   <Fingerprint size={18} />
                   Connect Wallet
                 </button>
+                {!walletAvailable && (
+                  <p className="mt-4 text-xs leading-6 text-cyan-100/65">
+                    No injected wallet detected in this browser. Open the game in a
+                    wallet-enabled browser or enable your wallet extension.
+                  </p>
+                )}
                 {connectError && (
                   <p className="mt-4 text-xs text-red-300">{connectError.message}</p>
                 )}
